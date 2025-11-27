@@ -83,109 +83,109 @@ class RandomFaultGenerator:
 
         return self.valve_clog_level if self.valve_is_clogged else 0.0
 
-    # def check_random_filling(self, current_time, dt):
-    #     """
-    #     Randomly trigger external water filling
-    #     Returns: additional flow rate (m³/s)
-    #     """
-
-    #     # If already filling, check if it's time to stop
-    #     if self.is_filling:
-    #         if current_time >= self.filling_end_time:
-    #             print(f" [{current_time:.1f}s] Random filling STOPPED")
-    #             self.is_filling = False
-    #             self.filling_rate = 0.0
-    #             self.last_event_time = current_time
-    #         return self.filling_rate
-
-    #     # Random chance to start filling (0.08% per time step when not recently happened)
-    #     time_since_last = current_time - self.last_event_time
-    #     if time_since_last > self.min_time_between_events:
-    #         if np.random.random() < 0.0008:  # 0.08% chance per step
-    #             # Start filling
-    #             self.is_filling = True
-    #             self.filling_start_time = current_time
-
-    #             # Random duration: 20-90 seconds
-    #             fill_duration = np.random.uniform(20, 90)
-    #             self.filling_end_time = current_time + fill_duration
-
-    #             # Random filling rate: 0.05-0.15 m³/s (significant but not overwhelming)
-    #             self.filling_rate = np.random.uniform(0.05, 0.15)
-
-    #             print(
-    #                 f" [{current_time:.1f}s] Random filling STARTED! "
-    #                 f"Rate: {self.filling_rate*1000:.0f} L/s "
-    #                 f"for {fill_duration:.0f}s"
-    #             )
-
-    #     return self.filling_rate if self.is_filling else 0.0
-
-    def check_random_filling(
-        self, filling_start_capacitie, filling_end_capacitie, current_capacitie, dt
-    ):
+    def check_random_filling(self, current_time, dt):
         """
-        Randomly trigger external water filling based mainly on tank fullness.
-
-        Logic:
-        - When the tank level (current_capacitie) is BELOW filling_start_capacitie,
-          there is a small random chance to start a filling event.
-        - Once started, filling continues until the level reaches
-          self.filling_end_capacitie (around filling_end_capacitie), then stops.
-
-        Returns: additional flow rate (m³/s), positive when filling.
+        Randomly trigger external water filling
+        Returns: additional flow rate (m³/s)
         """
 
-        # --- 1) If already filling, check if we should stop ---
+        # If already filling, check if it's time to stop
         if self.is_filling:
-            # Stop when we reached or exceeded the target level
-            if current_capacitie >= self.filling_end_capacitie:
-                print(
-                    f" [Level {current_capacitie:.2f}] Random filling STOPPED "
-                    f"(target {self.filling_end_capacitie:.2f} reached)"
-                )
+            if current_time >= self.filling_end_time:
+                print(f" [{current_time:.1f}s] Random filling STOPPED")
                 self.is_filling = False
                 self.filling_rate = 0.0
-                self.filling_start_capacitie = None
-                self.filling_end_capacitie = None
-
-            # While filling is active, always return the same filling_rate
+                self.last_event_time = current_time
             return self.filling_rate
 
-        # --- 2) Not currently filling: decide whether to start ---
-
-        # Only consider a new filling fault if the tank is "low"
-        if current_capacitie <= filling_start_capacitie:
-            # We want something like "on average once per X seconds when low".
-            # Convert that into a per-step probability.
-            average_start_interval = 60.0  # seconds (tune this)
-            lambda_per_sec = 1.0 / average_start_interval
-            # Poisson-style start probability per step
-            p_start = 1.0 - np.exp(-lambda_per_sec * dt)
-
-            if np.random.random() < p_start:
-                # Start a new filling event
+        # Random chance to start filling (0.08% per time step when not recently happened)
+        time_since_last = current_time - self.last_event_time
+        if time_since_last > self.min_time_between_events:
+            if np.random.random() < 0.0008:  # 0.08% chance per step
+                # Start filling
                 self.is_filling = True
-                self.filling_start_capacitie = current_capacitie
+                self.filling_start_time = current_time
 
-                # Target "full" level: around filling_end_capacitie,
-                # with a small random overshoot so it's not always exactly the same.
-                overshoot = np.random.uniform(
-                    0.0, 0.1 * (filling_end_capacitie - filling_start_capacitie)
-                )
-                self.filling_end_capacitie = filling_end_capacitie + overshoot
+                # Random duration: 20-90 seconds
+                fill_duration = np.random.uniform(20, 90)
+                self.filling_end_time = current_time + fill_duration
 
-                # Random filling rate: same range as your original design
+                # Random filling rate: 0.05-0.15 m³/s (significant but not overwhelming)
                 self.filling_rate = np.random.uniform(0.05, 0.15)
 
                 print(
-                    f" [Level {current_capacitie:.2f}] Random filling STARTED! "
+                    f" [{current_time:.1f}s] Random filling STARTED! "
                     f"Rate: {self.filling_rate*1000:.0f} L/s "
-                    f"until level reaches ~{self.filling_end_capacitie:.2f}"
+                    f"for {fill_duration:.0f}s"
                 )
 
-        # If no filling event active, no additional flow
         return self.filling_rate if self.is_filling else 0.0
+
+    # def check_random_filling(
+    #     self, filling_start_capacitie, filling_end_capacitie, current_capacitie, dt
+    # ):
+    #     """
+    #     Randomly trigger external water filling based mainly on tank fullness.
+
+    #     Logic:
+    #     - When the tank level (current_capacitie) is BELOW filling_start_capacitie,
+    #       there is a small random chance to start a filling event.
+    #     - Once started, filling continues until the level reaches
+    #       self.filling_end_capacitie (around filling_end_capacitie), then stops.
+
+    #     Returns: additional flow rate (m³/s), positive when filling.
+    #     """
+
+    #     # --- 1) If already filling, check if we should stop ---
+    #     if self.is_filling:
+    #         # Stop when we reached or exceeded the target level
+    #         if current_capacitie >= self.filling_end_capacitie:
+    #             print(
+    #                 f" [Level {current_capacitie:.2f}] Random filling STOPPED "
+    #                 f"(target {self.filling_end_capacitie:.2f} reached)"
+    #             )
+    #             self.is_filling = False
+    #             self.filling_rate = 0.0
+    #             self.filling_start_capacitie = None
+    #             self.filling_end_capacitie = None
+
+    #         # While filling is active, always return the same filling_rate
+    #         return self.filling_rate
+
+    #     # --- 2) Not currently filling: decide whether to start ---
+
+    #     # Only consider a new filling fault if the tank is "low"
+    #     if current_capacitie <= filling_start_capacitie:
+    #         # We want something like "on average once per X seconds when low".
+    #         # Convert that into a per-step probability.
+    #         average_start_interval = 60.0  # seconds (tune this)
+    #         lambda_per_sec = 1.0 / average_start_interval
+    #         # Poisson-style start probability per step
+    #         p_start = 1.0 - np.exp(-lambda_per_sec * dt)
+
+    #         if np.random.random() < p_start:
+    #             # Start a new filling event
+    #             self.is_filling = True
+    #             self.filling_start_capacitie = current_capacitie
+
+    #             # Target "full" level: around filling_end_capacitie,
+    #             # with a small random overshoot so it's not always exactly the same.
+    #             overshoot = np.random.uniform(
+    #                 0.0, 0.1 * (filling_end_capacitie - filling_start_capacitie)
+    #             )
+    #             self.filling_end_capacitie = filling_end_capacitie + overshoot
+
+    #             # Random filling rate: same range as your original design
+    #             self.filling_rate = np.random.uniform(0.05, 0.15)
+
+    #             print(
+    #                 f" [Level {current_capacitie:.2f}] Random filling STARTED! "
+    #                 f"Rate: {self.filling_rate*1000:.0f} L/s "
+    #                 f"until level reaches ~{self.filling_end_capacitie:.2f}"
+    #             )
+
+    #     # If no filling event active, no additional flow
+    #     return self.filling_rate if self.is_filling else 0.0
 
     def get_current_label(self):
         """
