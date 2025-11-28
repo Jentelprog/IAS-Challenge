@@ -493,10 +493,15 @@ def run_with_random_faults(duration=180):
 
     try:
         t = 0.0
+        filling_start_capacitie = TANK_HEIGHT_MAX * 0.2
+        filling_end_capacitie = TANK_HEIGHT_MAX * 0.8
+
         for step in range(steps):
             # Check for faults
             valve_clog_factor = fault_gen.check_valve_clogging(t, dt)
-            random_filling = fault_gen.check_random_filling(t, dt)
+            random_filling = fault_gen.check_random_filling(
+                filling_start_capacitie, filling_end_capacitie, tank.h, dt
+            )
 
             # Effective valve opening
             if valve_clog_factor > 0:
