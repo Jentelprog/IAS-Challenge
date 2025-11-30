@@ -8,14 +8,14 @@ The system can generate **clean datasets**, **faulty datasets**, and **live visu
 
 It is ideal for:
 
-- 🧠 Machine learning dataset generation
-- 🔧 Fault detection & diagnosis research
-- 🎓 Educational control system simulations
-- 🧪 Controller testing / benchmarking
+- Machine learning dataset generation
+- Fault detection & diagnosis research
+- Educational control system simulations
+- Controller testing / benchmarking
 
 ---
 
-# 📁 Project Structure
+# Project Structure
 
 ```
 project/
@@ -40,13 +40,13 @@ project/
 
 ---
 
-# ⚙️ System Overview
+# System Overview
 
 The simulation consists of **5 main subsystems**:
 
 ---
 
-## 1. 🌊 WaterTank — Physical Tank Model
+## 1. WaterTank Physical Tank Model
 
 **File:** `tank_model.py`
 
@@ -72,7 +72,7 @@ Where:
 
 ---
 
-## 2. ⚡ OnOffController — Pump Controller
+## 2. OnOffController Pump Controller
 
 **File:** `controller.py`
 
@@ -83,7 +83,7 @@ Implements a simple ON/OFF logic:
 
 ---
 
-## 3. 🎛 SensorSuite — Measurement Model
+## 3. SensorSuite Measurement Model
 
 **File:** `sensor_model.py`
 
@@ -98,7 +98,7 @@ Simulates imperfect sensors with:
 
 ---
 
-## 4. ⚠️ Fault Injection System
+## 4. Fault Injection System
 
 **File:** `generate_random_faults.py`
 
@@ -122,7 +122,7 @@ Occurs when both fault mechanisms overlap.
 
 ---
 
-## 5. 📊 Data Generators
+## 5. Data Generators
 
 ### Normal Operation
 
@@ -139,7 +139,7 @@ Output:
 
 ---
 
-# 📈 Visualization Tools
+# Visualization Tools
 
 ## Matplotlib Plot
 
@@ -155,7 +155,7 @@ python visualize_with_turtle.py
 
 ---
 
-# 🧰 Technologies Used
+# Technologies Used
 
 - Python 3.10+
 - numpy
@@ -166,7 +166,7 @@ python visualize_with_turtle.py
 
 ---
 
-# 🔧 Configuration System
+# Configuration System
 
 Centralized config file:
 
@@ -176,7 +176,7 @@ config/parameters.py
 
 ---
 
-# ▶️ Running the Simulation
+# Running the Simulation
 
 ### Normal:
 
@@ -198,7 +198,7 @@ python visualize_with_turtle.py
 
 ---
 
-# 📄 Dataset Format
+# Dataset Format
 
 Each CSV contains:
 
@@ -221,7 +221,7 @@ Each CSV contains:
 
 ---
 
-# 🛠 Future Improvements
+# Future Improvements
 
 - PID controller
 - Multi-tank system
@@ -231,7 +231,7 @@ Each CSV contains:
 
 ---
 
-# 🏁 Summary
+# Summary
 
 This is a complete simulation environment for:
 
