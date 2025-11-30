@@ -1,244 +1,100 @@
-# 🚰 Water Tank Simulation System
+# Water Tank Digital Twin with Intrusion Detection System (IDS)
 
-### Fault Injection • Sensor Modeling • Control Logic • Dataset Generation • Visualization
+This repository contains a Python-based digital twin simulation of an industrial water tank system, integrated with an Intrusion Detection System (IDS) based on Machine Learning (ML) and security metadata analysis.
 
-This project is a **modular and extensible water tank simulation framework**.  
-It models tank physics, pump control logic, sensor noise, and fault behaviors.  
-The system can generate **clean datasets**, **faulty datasets**, and **live visualizations**.
+The project is structured to simulate a Cyber-Physical System (CPS) environment, generating realistic sensor data, applying control logic, introducing physical faults, and implementing security mechanisms to detect anomalies and attacks.
 
-It is ideal for:
+## Features
 
-- Machine learning dataset generation
-- Fault detection & diagnosis research
-- Educational control system simulations
-- Controller testing / benchmarking
+- **Digital Twin Simulation:** Realistic simulation of a water tank's physical dynamics (level, flow, pressure) using a time-step model.
+- **Control System:** An On/Off controller maintains the water level at a defined setpoint.
+- **Fault Generation:** Scripts to generate datasets for normal operation and various fault scenarios (e.g., valve clogging, unauthorized filling).
+- **Machine Learning IDS:** A **Random Forest Classifier** trained to detect physical anomalies/faults in the sensor data stream.
+- **Security Metadata Integration:** The simulation stream includes security checks for:
+  - **Authentication**
+  - **Integrity** (data hashing)
+  - **Anti-Replay** (detection of repeated sensor values)
+  - **Physical Bounds & Inconsistency Monitoring**
+- **Real-Time Dashboard:** A Streamlit application for visualizing the live simulation data and ML-based anomaly predictions.
 
----
+## Project Structure
 
-# Project Structure
+The project is organized into three main components: the core simulation, the machine learning IDS, and the visualization dashboard.
 
-```
-project/
-│
-├── config/
-│   └── parameters.py
-│
-├── controller.py
-├── tank_model.py
-├── sensor_model.py
-│
-├── generate_normal.py
-├── generate_random_faults.py
-│
-├── visualize_with_turtle.py
-│
-└── data/
-    ├── normal.csv
-    ├── random_faults.csv
-    └── random_faults.png
-```
+| Directory                             | Purpose                                                  | Key Files                                                                    |
+| :------------------------------------ | :------------------------------------------------------- | :--------------------------------------------------------------------------- |
+| `water_tank_simulation/src`           | Core simulation logic and data generation.               | `tank_model.py`, `controller.py`, `realtime_simulation.py`                   |
+| `water_tank_simulation/security`      | Security and integrity monitoring components.            | `authentication.py`, `integrity.py`, `anti_replay.py`, `security_monitor.py` |
+| `water_tank_simulation/config`        | System configuration parameters.                         | `parameters.py`                                                              |
+| `water_tank_simulation/data`          | Generated datasets for training and real-time inference. | `random_faults.csv`, `realtime_stream.csv`                                   |
+| `water_tank_simulation/src/artifacts` | Trained ML model and evaluation results.                 | `rf_model.pkl`, `scaler.pkl`, `training_report.txt`                          |
+| `dashboarding`                        | Streamlit web application for visualization.             | `vise.py`                                                                    |
 
----
+## Installation
 
-# System Overview
+The project requires Python 3.10+ and the dependencies listed in `requirements.txt`.
 
-The simulation consists of **5 main subsystems**:
+1.  **Clone the repository:**
 
----
+    ```bash
+    git clone https://github.com/Jentelprog/IAS-Challenge
+    cd IAS-Challenge
+    ```
 
-## 1. WaterTank Physical Tank Model
+2.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-**File:** `tank_model.py`
+## Usage
 
-Simulates realistic tank dynamics:
+The workflow involves three main steps: data generation (optional), model training, and real-time execution with the dashboard.
 
-- Water inflow (pump)
-- Water outflow (valve-controlled)
-- Disturbances (leaks, extra filling)
-- Safety level clamping
-- Pressure computation (`ρ g h`)
+### 1. Train the Anomaly Detector
 
-**Main equation:**
+The `AI-anomaly-detector.py` script handles the training, evaluation, and artifact saving for the Random Forest classifier.
 
-```
-dh/dt = (q_in - q_out ± disturbance) / A
+```bash
+# Train the model using the provided random_faults.csv
+python water_tank_simulation/src/AI-anomaly-detector.py --train
 ```
 
-Where:
+This command will save the trained model (`rf_model.pkl`), the data scaler (`scaler.pkl`), and evaluation reports to the `water_tank_simulation/src/artifacts` directory.
 
-- `A` = tank cross-sectional area
-- `q_in` = pump flow
-- `q_out` = valve-controlled outflow
+### 2. Run Real-Time Inference
 
----
+The `run_realtime_inference.py` script starts the digital twin simulation and continuously feeds the live sensor data (including security metadata) into the trained ML model for real-time anomaly detection.
 
-## 2. OnOffController Pump Controller
-
-**File:** `controller.py`
-
-Implements a simple ON/OFF logic:
-
-- Pump **ON** if level < (setpoint − deadband)
-- Pump **OFF** if level > (setpoint + deadband)
-
----
-
-## 3. SensorSuite Measurement Model
-
-**File:** `sensor_model.py`
-
-Simulates imperfect sensors with:
-
-- Gaussian noise
-- Drift
-- Bias
-- Non-linearity
-- Pump current estimation
-- Spoofing / attack modes
-
----
-
-## 4. Fault Injection System
-
-**File:** `generate_random_faults.py`
-
-Injects two **process-level faults**:
-
-### **Valve Clogging (label 6)**
-
-- Random trigger
-- Duration: **30–120 s**
-- Severity: **20–40% open**
-
-### **Random Filling (label 7)**
-
-- Level-based trigger (<20%)
-- Stops at (~80%)
-- Filling rate: **0.05–0.15 m³/s**
-
-### **Both Faults (label 5)**
-
-Occurs when both fault mechanisms overlap.
-
----
-
-## 5. Data Generators
-
-### Normal Operation
-
-**File:** `generate_normal.py`  
-Output: `data/normal.csv`
-
-### Fault Injection
-
-**File:** `generate_random_faults.py`  
-Output:
-
-- `data/random_faults.csv`
-- `data/random_faults.png`
-
----
-
-# Visualization Tools
-
-## Matplotlib Plot
-
-Automatically generated fault visualization saved as PNG.
-
-## Turtle Animation
-
-Real-time dynamic tank simulation:
-
-```
-python visualize_with_turtle.py
+```bash
+# Start the live simulation and inference loop
+python water_tank_simulation/src/run_realtime_inference.py
 ```
 
----
+This script writes the latest sensor data and ML predictions to `water_tank_simulation/data/realtime_stream.csv`, which is then read by the dashboard.
 
-# Technologies Used
+### 3. Launch the Dashboard
 
-- Python 3.10+
-- numpy
-- pandas
-- matplotlib
-- turtle
-- time / os / sys
+The Streamlit dashboard provides a visual interface to monitor the system state and the IDS output.
 
----
-
-# Configuration System
-
-Centralized config file:
-
-```
-config/parameters.py
+```bash
+# Launch the Streamlit application
+streamlit run dashboarding/vise.py
 ```
 
----
+Access the dashboard in your web browser, typically at `http://localhost:8501`.
 
-# Running the Simulation
+## Suggested Improvements
 
-### Normal:
+The current implementation is a solid foundation for a Cyber-Physical IDS challenge. Here are the detailed suggestions for enhancing the project:
 
-```
-python generate_normal.py
-```
+| Category                | Suggestion                       | Rationale                                                                                                                                                                                                                                                                     |
+| :---------------------- | :------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Security**            | **Secure Key Management**        | The `SECRET_KEY` is currently hardcoded in `security/authentication.py`. For production readiness, it should be loaded from a secure source like an environment variable or a secret manager to prevent exposure.                                                             |
+| **ML Model**            | **Feature Engineering**          | The current model uses raw sensor values. Incorporating **time-series features** (e.g., rolling averages, standard deviations, time-lagged values) would significantly improve the model's ability to detect temporal anomalies and subtle changes in system dynamics.        |
+| **ML Model**            | **Model Selection**              | While Random Forest is effective, exploring other time-series-aware models like **LSTMs** or **Isolation Forest** could provide better performance or a more robust baseline for comparison.                                                                                  |
+| **Code Structure**      | **Configuration Centralization** | Centralize all configuration, including ML constants (`CLASS_NAMES`, artifact paths), into `config/parameters.py`. This avoids hardcoding paths and values in the ML script (`AI-anomaly-detector.py`), making the project easier to configure and maintain.                  |
+| **Security Monitoring** | **Advanced Checks**              | Enhance the `SecurityMonitor` to include more sophisticated checks, such as **Rate Limiting** (detecting an unusually high rate of data transmission) and **Statistical Process Control (SPC)** (monitoring for shifts in the mean or variance of sensor readings over time). |
 
-### Random Faults:
+## Contributing
 
-```
-python generate_random_faults.py
-```
-
-### Live Turtle Animation:
-
-```
-python visualize_with_turtle.py
-```
-
----
-
-# Dataset Format
-
-Each CSV contains:
-
-| Column           | Description                  |
-| ---------------- | ---------------------------- |
-| timestamp        | simulation time              |
-| level_real       | noisy level                  |
-| flow_in_real     | inflow                       |
-| flow_out_real    | outflow                      |
-| pressure_real    | pressure                     |
-| pump_state       | 0/1                          |
-| pump_current     | estimated current            |
-| valve_position   | actual valve position (%)    |
-| valve_commanded  | commanded valve position (%) |
-| is_valve_clogged | 1/0                          |
-| is_filling       | 1/0                          |
-| filling_rate     | m³/s                         |
-| label            | ML class                     |
-| scenario_id      | scenario tag                 |
-
----
-
-# Future Improvements
-
-- PID controller
-- Multi-tank system
-- Additional sensor/actuator faults
-- Reinforcement learning environment
-- Streaming (MQTT/SocketIO)
-
----
-
-# Summary
-
-This is a complete simulation environment for:
-
-✔ Fault detection  
-✔ Predictive maintenance  
-✔ Control system teaching  
-✔ ML dataset generation  
-✔ SCADA/ICS security research
-
-A robust and modular platform for testing intelligent control and fault diagnosis algorithms.
+Contributions are welcome! Please feel free to submit a Pull Request or open an Issue for any bugs or feature requests.
