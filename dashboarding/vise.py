@@ -47,7 +47,7 @@ st.title("🛰️ AI-Driven Digital Twin IDS – Dashboard")
 st.caption("Live simulation • Anomaly detection • Industrial cybersecurity")
 
 # ---------------------------------------------------------------------
-# Sidebar controls (simple, like original)
+# Sidebar controls
 # ---------------------------------------------------------------------
 
 with st.sidebar:
@@ -100,20 +100,15 @@ def load_historical_data(which: str):
     Return (df, path, exists)
     Tries a couple of common locations and reports which one worked.
     """
-    # Primary expected paths
     if which == "Normal operation":
         candidates = [
-            NORMAL_FILE,  # water_tank_simulation/data/normal_operation.csv
-            os.path.join(
-                BASE_DIR, "normal_operation.csv"
-            ),  # water_tank_simulation/normal_operation.csv
+            NORMAL_FILE,
+            os.path.join(BASE_DIR, "normal_operation.csv"),
         ]
     else:
         candidates = [
-            FAULT_FILE,  # water_tank_simulation/data/random_faults.csv
-            os.path.join(
-                BASE_DIR, "random_faults.csv"
-            ),  # water_tank_simulation/random_faults.csv
+            FAULT_FILE,
+            os.path.join(BASE_DIR, "random_faults.csv"),
         ]
 
     for path in candidates:
@@ -122,10 +117,8 @@ def load_historical_data(which: str):
                 df = pd.read_csv(path)
                 return df, path, True
             except Exception:
-                # If file exists but can't be read, treat as missing
                 return pd.DataFrame(), path, False
 
-    # No candidate exists
     return pd.DataFrame(), candidates[0], False
 
 
@@ -161,8 +154,18 @@ def status_badge(flag: int) -> str:
     return "🟥 ANOMALY" if flag == 1 else "🟩 NORMAL"
 
 
+def attack_badge(is_under_attack: int, attack_type: str) -> str:
+    if is_under_attack:
+        return f"🧨 {attack_type}"
+    return "🟩 none"
+
+
+def sec_badge(sec_alert: int) -> str:
+    return "🟥 ALERT" if sec_alert else "🟩 OK"
+
+
 # ---------------------------------------------------------------------
-# Tabs: like original – Live + Historical
+# Tabs: Live + Historical
 # ---------------------------------------------------------------------
 
 tab_live, tab_history = st.tabs([" Live Monitoring", " Historical Data"])
@@ -195,12 +198,17 @@ with tab_live:
         class_name = str(last.get("class_name", "unknown"))
         confidence = float(last.get("confidence", 0.0))
 
+        is_under_attack = int(last.get("is_under_attack", 0))
+        attack_type = str(last.get("attack_type", "none"))
+        sec_alert = int(last.get("sec_alert", 0))
+        sec_msg = str(last.get("sec_alert_message", "")).strip()
+
         total_samples = len(df_live)
         anomalies_count = int(df_live.get("anomaly_flag", 0).sum())
         anomaly_rate = anomalies_count / total_samples if total_samples > 0 else 0.0
 
         # -----------------------------------------------------------------
-        # KPI section – 3 columns like original, but fewer numbers
+        # KPI section
         # -----------------------------------------------------------------
         col_snapshot, col_stats, col_model = st.columns(3)
 
@@ -216,6 +224,13 @@ with tab_live:
             r2c2.metric("Predicted", class_name)
             r2c3.metric("Confidence", f"{confidence*100:.1f}%")
 
+            r3c1, r3c2 = st.columns(2)
+            r3c1.metric("Cyber Attack", attack_badge(is_under_attack, attack_type))
+            r3c2.metric("Security Monitor", sec_badge(sec_alert))
+
+            if sec_alert and sec_msg:
+                st.caption(f"Security alert: {sec_msg}")
+
         with col_stats:
             st.markdown("### Anomaly Statistics")
             c1, c2, c3 = st.columns(3)
@@ -228,10 +243,12 @@ with tab_live:
             st.write(
                 "- **Model**: RandomForestClassifier\n"
                 "- **Classes**: `normal`, `fault_both`, `fault_clogged`, `fault_filling`\n"
-                "- **Stream file**: `realtime_stream.csv`"
+                "- **Stream file**: `realtime_stream.csv`\n"
+                "- **Extra fields**: `is_under_attack`, `attack_type`, `sec_alert`, "
+                "`sec_alert_message`, `is_replay_suspected`, `integrity_hash`"
             )
 
-        # Compact status banner under KPIs
+        # Status banner
         if anomaly_flag == 1:
             st.warning(
                 f" Detected **{class_name}** "
@@ -240,6 +257,12 @@ with tab_live:
         else:
             st.success("IDS reports **normal** behaviour for the latest sample.")
 
+        if is_under_attack:
+            st.info(
+                f"Cyber attack **{attack_type}** is active in the simulation "
+                f"around t = {last['timestamp']:.1f} s."
+            )
+
         st.markdown("---")
 
         # -----------------------------------------------------------------
@@ -247,9 +270,9 @@ with tab_live:
         # -----------------------------------------------------------------
         main_col, side_col = st.columns([2.2, 1.8])
 
-        # Main chart: water level + anomaly markers
+        # Main chart: water level + anomaly markers + attack shading
         with main_col:
-            st.markdown("#### Water Level with Anomaly Markers")
+            st.markdown("#### Water Level with Anomaly & Attack Markers")
 
             base = alt.Chart(df_view).encode(x=alt.X("timestamp:Q", title="Time [s]"))
 
@@ -267,14 +290,33 @@ with tab_live:
                         alt.Tooltip("level_real:Q", format=".3f", title="Level [m]"),
                         alt.Tooltip("class_name:N", title="Predicted"),
                         alt.Tooltip("confidence:Q", format=".2f", title="Confidence"),
+                        alt.Tooltip("attack_type:N", title="Attack"),
                     ],
                 )
             )
 
-            chart = (level_line + anomaly_points).properties(height=280)
+            # Attack shading (light orange) where is_under_attack == 1
+            attack_layer = None
+            if "is_under_attack" in df_view.columns:
+                attack_layer = (
+                    base.transform_filter("datum.is_under_attack == 1")
+                    .mark_rect(opacity=0.15, color="orange")
+                    .encode(
+                        y=alt.value(0),
+                        y2=alt.value(1),
+                    )
+                )
+
+            if attack_layer is not None:
+                chart = (attack_layer + level_line + anomaly_points).properties(
+                    height=280
+                )
+            else:
+                chart = (level_line + anomaly_points).properties(height=280)
+
             st.altair_chart(chart, use_container_width=True)
 
-            # Latest anomalies table (small)
+            # Latest anomalies table
             anomalies = df_live[df_live.get("anomaly_flag", 0) == 1]
             if not anomalies.empty:
                 st.markdown("##### Latest anomalies")
@@ -285,7 +327,13 @@ with tab_live:
                     "flow_out_real",
                     "label",
                 ]
-                for extra in ["class_name", "confidence"]:
+                for extra in [
+                    "class_name",
+                    "confidence",
+                    "attack_type",
+                    "is_under_attack",
+                    "sec_alert",
+                ]:
                     if extra in anomalies.columns:
                         cols_to_show.append(extra)
                 st.dataframe(
@@ -295,18 +343,24 @@ with tab_live:
             else:
                 st.write("No anomalies detected yet in this stream.")
 
-        # Side charts: flows, current, predicted class timeline
+        # Side charts: flows, current, predicted class timeline, attack & sec flags
         with side_col:
             st.markdown("#### Flows")
 
-            flows_df = df_view[["timestamp", "flow_in_real", "flow_out_real"]]
-            flows_df = flows_df.set_index("timestamp")
-            st.line_chart(flows_df, height=150)
+            if {"timestamp", "flow_in_real", "flow_out_real"}.issubset(df_view.columns):
+                flows_df = df_view[["timestamp", "flow_in_real", "flow_out_real"]]
+                flows_df = flows_df.set_index("timestamp")
+                st.line_chart(flows_df, height=150)
+            else:
+                st.info("Flow columns missing in real-time stream.")
 
             st.markdown("#### Pump Current")
-            current_df = df_view[["timestamp", "pump_current"]]
-            current_df = current_df.set_index("timestamp")
-            st.line_chart(current_df, height=150)
+            if {"timestamp", "pump_current"}.issubset(df_view.columns):
+                current_df = df_view[["timestamp", "pump_current"]]
+                current_df = current_df.set_index("timestamp")
+                st.line_chart(current_df, height=150)
+            else:
+                st.info("`pump_current` column missing in real-time stream.")
 
             if "class_name" in df_view.columns:
                 st.markdown("#### Predicted Class Timeline")
@@ -320,11 +374,40 @@ with tab_live:
                         tooltip=[
                             alt.Tooltip("timestamp:Q", format=".2f", title="Time [s]"),
                             "class_name:N",
+                            "attack_type:N",
                         ],
                     )
                     .properties(height=80)
                 )
                 st.altair_chart(class_chart, use_container_width=True)
+
+            # Attack & security flags over time
+            if {
+                "timestamp",
+                "is_under_attack",
+                "sec_alert",
+            }.issubset(df_view.columns):
+                st.markdown("#### Cyber Attack & Security Flags")
+                flags_df = df_view[["timestamp", "is_under_attack", "sec_alert"]].copy()
+                flags_df = flags_df.melt("timestamp", var_name="flag", value_name="val")
+                flag_chart = (
+                    alt.Chart(flags_df)
+                    .mark_line(step="post")
+                    .encode(
+                        x=alt.X("timestamp:Q", title="Time [s]"),
+                        y=alt.Y(
+                            "val:Q", title="Flag (0/1)", scale=alt.Scale(domain=[0, 1])
+                        ),
+                        color=alt.Color("flag:N", title="Signal"),
+                        tooltip=[
+                            alt.Tooltip("timestamp:Q", format=".2f", title="Time [s]"),
+                            "flag:N",
+                            "val:Q",
+                        ],
+                    )
+                    .properties(height=130)
+                )
+                st.altair_chart(flag_chart, use_container_width=True)
 
         st.markdown("---")
 
@@ -342,6 +425,30 @@ with tab_live:
             key="forecast_horizon",
         )
         forecast_df = simple_forecast(df_live, horizon_seconds=horizon)
+
+        if not forecast_df.empty:
+            hist = df_view[["timestamp", "level_real"]].rename(
+                columns={"level_real": "value"}
+            )
+            hist["type"] = "history"
+            fut = forecast_df.rename(columns={"level_pred": "value"})
+            fut["type"] = "forecast"
+            combined = pd.concat([hist, fut], ignore_index=True)
+
+            forecast_chart = (
+                alt.Chart(combined)
+                .mark_line()
+                .encode(
+                    x=alt.X("timestamp:Q", title="Time [s]"),
+                    y=alt.Y("value:Q", title="Water level [m]"),
+                    color=alt.Color("type:N", title="Series"),
+                )
+                .properties(height=240)
+            )
+            st.altair_chart(forecast_chart, use_container_width=True)
+        else:
+            st.info("Not enough data yet to compute a forecast.")
+
 # ---------------------------------------------------------------------
 # HISTORICAL TAB
 # ---------------------------------------------------------------------
