@@ -165,7 +165,7 @@ def status_badge(flag: int) -> str:
 # Tabs: like original – Live + Historical
 # ---------------------------------------------------------------------
 
-tab_live, tab_history = st.tabs(["🔴 Live Monitoring", "📚 Historical Data"])
+tab_live, tab_history = st.tabs([" Live Monitoring", " Historical Data"])
 
 # ---------------------------------------------------------------------
 # LIVE TAB
@@ -178,7 +178,7 @@ with tab_live:
     if df_live.empty:
         st.info(
             "No real-time data yet.\n\n"
-            "➡️ In another terminal, run `python run_realtime_inference.py` "
+            "In another terminal, run `python run_realtime_inference.py` "
             "from `water_tank_simulation/src` to start the simulation + IDS."
         )
     else:
@@ -205,7 +205,7 @@ with tab_live:
         col_snapshot, col_stats, col_model = st.columns(3)
 
         with col_snapshot:
-            st.markdown("### 🔍 System Snapshot")
+            st.markdown("### System Snapshot")
             r1c1, r1c2, r1c3 = st.columns(3)
             r1c1.metric("Time [s]", f"{last['timestamp']:.1f}")
             r1c2.metric("Level [m]", f"{last['level_real']:.3f}")
@@ -217,14 +217,14 @@ with tab_live:
             r2c3.metric("Confidence", f"{confidence*100:.1f}%")
 
         with col_stats:
-            st.markdown("### 📊 Anomaly Statistics")
+            st.markdown("### Anomaly Statistics")
             c1, c2, c3 = st.columns(3)
             c1.metric("Samples", f"{total_samples}")
             c2.metric("Anomalies", f"{anomalies_count}")
             c3.metric("Rate", f"{anomaly_rate*100:.2f}%")
 
         with col_model:
-            st.markdown("### 🧠 Model Info")
+            st.markdown("### Model Info")
             st.write(
                 "- **Model**: RandomForestClassifier\n"
                 "- **Classes**: `normal`, `fault_both`, `fault_clogged`, `fault_filling`\n"
@@ -234,11 +234,11 @@ with tab_live:
         # Compact status banner under KPIs
         if anomaly_flag == 1:
             st.warning(
-                f"🚨 Detected **{class_name}** "
+                f" Detected **{class_name}** "
                 f"(confidence {confidence*100:.1f}%) at t = {last['timestamp']:.1f} s."
             )
         else:
-            st.success("✅ IDS reports **normal** behaviour for the latest sample.")
+            st.success("IDS reports **normal** behaviour for the latest sample.")
 
         st.markdown("---")
 
