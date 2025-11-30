@@ -1,14 +1,14 @@
 """
 DT-IDS Dashboard (Streamlit)
 
-Shows:
-- Live real-time data from realtime_stream.csv
+Live dashboard for:
+- Real-time data from realtime_stream.csv
 - Historical datasets (normal_operation.csv, random_faults.csv)
-- Current anomaly status and anomaly timeline
-- Simple future forecast of water level (linear trend extrapolation)
+- Current anomaly status & fault type
+- Simple future forecast of water level
 
 Requires:
-    pip install streamlit pandas numpy matplotlib
+    pip install streamlit pandas numpy altair streamlit-autorefresh
 
 Run from project root:
     cd dashboarding
@@ -16,10 +16,11 @@ Run from project root:
 """
 
 import os
-import time
 import numpy as np
 import pandas as pd
 import streamlit as st
+import altair as alt
+from streamlit_autorefresh import st_autorefresh
 
 # ---------------------------------------------------------------------
 # Paths
@@ -34,7 +35,7 @@ NORMAL_FILE = os.path.join(DATA_DIR, "normal_operation.csv")
 FAULT_FILE = os.path.join(DATA_DIR, "random_faults.csv")
 
 # ---------------------------------------------------------------------
-# Streamlit config
+# Streamlit base config
 # ---------------------------------------------------------------------
 
 st.set_page_config(
@@ -42,61 +43,114 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("AI-Driven Digital Twin IDS – Dashboard")
-st.caption("Live simulation, anomaly detection, and historical analysis")
+st.title("🛰️ AI-Driven Digital Twin IDS – Dashboard")
+st.caption("Live simulation • Anomaly detection • Industrial cybersecurity")
 
+# ---------------------------------------------------------------------
+# Sidebar controls (simple, like original)
+# ---------------------------------------------------------------------
+
+with st.sidebar:
+    st.header("⚙️ Controls")
+
+    refresh_interval = st.slider(
+        "Auto-refresh (seconds)",
+        min_value=1.0,
+        max_value=10.0,
+        value=2.0,
+        step=1.0,
+        key="refresh_interval",
+    )
+
+    history_window = st.slider(
+        "History window (seconds)",
+        min_value=30,
+        max_value=600,
+        value=180,
+        step=30,
+        key="history_window",
+    )
+
+    st.markdown("---")
+    st.markdown(
+        "💡 Run:\n\n"
+        "`python run_realtime_inference.py`\n\n"
+        "from `water_tank_simulation/src` to start the live stream."
+    )
+
+# Auto-refresh the whole app every N seconds (no manual rerun needed)
+st_autorefresh(interval=int(refresh_interval * 1000), key="dt_ids_autorefresh")
 
 # ---------------------------------------------------------------------
 # Utility functions
 # ---------------------------------------------------------------------
 
 
-@st.cache_data(ttl=2.0)
+@st.cache_data(ttl=1.0)
 def load_realtime_data() -> pd.DataFrame:
+    """Load the latest real-time stream produced by run_realtime_inference.py."""
     if not os.path.exists(REALTIME_FILE):
         return pd.DataFrame()
-    df = pd.read_csv(REALTIME_FILE)
-    return df
+    return pd.read_csv(REALTIME_FILE)
 
 
 @st.cache_data(ttl=60.0)
-def load_historical_data(which: str) -> pd.DataFrame:
+def load_historical_data(which: str):
+    """
+    Return (df, path, exists)
+    Tries a couple of common locations and reports which one worked.
+    """
+    # Primary expected paths
     if which == "Normal operation":
-        path = NORMAL_FILE
+        candidates = [
+            NORMAL_FILE,  # water_tank_simulation/data/normal_operation.csv
+            os.path.join(
+                BASE_DIR, "normal_operation.csv"
+            ),  # water_tank_simulation/normal_operation.csv
+        ]
     else:
-        path = FAULT_FILE
+        candidates = [
+            FAULT_FILE,  # water_tank_simulation/data/random_faults.csv
+            os.path.join(
+                BASE_DIR, "random_faults.csv"
+            ),  # water_tank_simulation/random_faults.csv
+        ]
 
-    if not os.path.exists(path):
-        return pd.DataFrame()
-    return pd.read_csv(path)
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                df = pd.read_csv(path)
+                return df, path, True
+            except Exception:
+                # If file exists but can't be read, treat as missing
+                return pd.DataFrame(), path, False
+
+    # No candidate exists
+    return pd.DataFrame(), candidates[0], False
 
 
 def simple_forecast(df: pd.DataFrame, horizon_seconds: float = 30.0) -> pd.DataFrame:
     """Very simple linear trend extrapolation for water level."""
     if df.empty or "timestamp" not in df.columns or "level_real" not in df.columns:
         return pd.DataFrame()
-
     if len(df) < 5:
         return pd.DataFrame()
 
     t = df["timestamp"].values
     y = df["level_real"].values
 
-    # Estimate slope from first and last points
     dt = t[-1] - t[0]
     if dt <= 0:
         return pd.DataFrame()
 
     slope = (y[-1] - y[0]) / dt
 
-    # Estimate time step
     if len(t) >= 2:
         dt_step = np.median(np.diff(t))
     else:
         dt_step = 0.1
 
     n_steps = max(1, int(horizon_seconds / dt_step))
-
     future_t = t[-1] + dt_step * np.arange(1, n_steps + 1)
     future_y = y[-1] + slope * (future_t - t[-1])
 
@@ -108,7 +162,7 @@ def status_badge(flag: int) -> str:
 
 
 # ---------------------------------------------------------------------
-# Layout
+# Tabs: like original – Live + Historical
 # ---------------------------------------------------------------------
 
 tab_live, tab_history = st.tabs(["🔴 Live Monitoring", "📚 Historical Data"])
@@ -119,119 +173,175 @@ tab_live, tab_history = st.tabs(["🔴 Live Monitoring", "📚 Historical Data"]
 with tab_live:
     st.subheader("Live DT-IDS Monitoring")
 
-    placeholder = st.empty()  # used for soft auto-refresh
-
-    # You can use Streamlit's auto-refresh-like behaviour with a loop
-    # BUT for simplicity we just reload once when user refreshes the page.
-    # If you want auto-refresh, uncomment the small loop below.
-
     df_live = load_realtime_data()
 
     if df_live.empty:
         st.info(
-            "No real-time data yet. "
-            "Make sure `run_realtime_inference.py` is running and generating "
-            "`realtime_stream.csv`."
+            "No real-time data yet.\n\n"
+            "➡️ In another terminal, run `python run_realtime_inference.py` "
+            "from `water_tank_simulation/src` to start the simulation + IDS."
         )
     else:
         df_live = df_live.sort_values("timestamp")
 
-        # Last row = current status
+        # Restrict to last N seconds to avoid overcrowded plots
+        t_max = df_live["timestamp"].max()
+        t_min = max(df_live["timestamp"].min(), t_max - history_window)
+        df_view = df_live[df_live["timestamp"].between(t_min, t_max)]
+
         last = df_live.iloc[-1]
 
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Current Time [s]", f"{last['timestamp']:.1f}")
-        col2.metric("Water Level [m]", f"{last['level_real']:.3f}")
-        col3.metric("Pump State", "ON" if last["pump_state"] == 1 else "OFF")
-        col4.metric("IDS Status", status_badge(int(last.get("anomaly_flag", 0))))
+        anomaly_flag = int(last.get("anomaly_flag", 0))
+        class_name = str(last.get("class_name", "unknown"))
+        confidence = float(last.get("confidence", 0.0))
+
+        total_samples = len(df_live)
+        anomalies_count = int(df_live.get("anomaly_flag", 0).sum())
+        anomaly_rate = anomalies_count / total_samples if total_samples > 0 else 0.0
+
+        # -----------------------------------------------------------------
+        # KPI section – 3 columns like original, but fewer numbers
+        # -----------------------------------------------------------------
+        col_snapshot, col_stats, col_model = st.columns(3)
+
+        with col_snapshot:
+            st.markdown("### 🔍 System Snapshot")
+            r1c1, r1c2, r1c3 = st.columns(3)
+            r1c1.metric("Time [s]", f"{last['timestamp']:.1f}")
+            r1c2.metric("Level [m]", f"{last['level_real']:.3f}")
+            r1c3.metric("Pump", "ON" if last["pump_state"] == 1 else "OFF")
+
+            r2c1, r2c2, r2c3 = st.columns(3)
+            r2c1.metric("IDS Status", status_badge(anomaly_flag))
+            r2c2.metric("Predicted", class_name)
+            r2c3.metric("Confidence", f"{confidence*100:.1f}%")
+
+        with col_stats:
+            st.markdown("### 📊 Anomaly Statistics")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Samples", f"{total_samples}")
+            c2.metric("Anomalies", f"{anomalies_count}")
+            c3.metric("Rate", f"{anomaly_rate*100:.2f}%")
+
+        with col_model:
+            st.markdown("### 🧠 Model Info")
+            st.write(
+                "- **Model**: RandomForestClassifier\n"
+                "- **Classes**: `normal`, `fault_both`, `fault_clogged`, `fault_filling`\n"
+                "- **Stream file**: `realtime_stream.csv`"
+            )
+
+        # Compact status banner under KPIs
+        if anomaly_flag == 1:
+            st.warning(
+                f"🚨 Detected **{class_name}** "
+                f"(confidence {confidence*100:.1f}%) at t = {last['timestamp']:.1f} s."
+            )
+        else:
+            st.success("✅ IDS reports **normal** behaviour for the latest sample.")
 
         st.markdown("---")
 
-        # Charts
-        c1, c2 = st.columns((2, 1))
+        # -----------------------------------------------------------------
+        # Charts row – main graph left, extras right
+        # -----------------------------------------------------------------
+        main_col, side_col = st.columns([2.2, 1.8])
 
-        with c1:
-            st.markdown("#### Water Level & Anomaly Flags")
+        # Main chart: water level + anomaly markers
+        with main_col:
+            st.markdown("#### Water Level with Anomaly Markers")
 
-            chart_df = df_live[["timestamp", "level_real", "anomaly_flag"]].copy()
-            chart_df["Anomaly"] = chart_df["anomaly_flag"].astype(bool)
+            base = alt.Chart(df_view).encode(x=alt.X("timestamp:Q", title="Time [s]"))
 
-            # Plot level
-            st.line_chart(
-                data=chart_df.set_index("timestamp")[["level_real"]],
-                height=300,
+            level_line = base.mark_line(color="#1f77b4").encode(
+                y=alt.Y("level_real:Q", title="Water level [m]")
             )
 
-            # Mark anomalies as dots (simple textual table)
-            anomalies = df_live[df_live["anomaly_flag"] == 1]
-            if not anomalies.empty:
-                st.write("Detected anomalies (latest 10):")
-                st.dataframe(
-                    anomalies.tail(10)[
-                        [
-                            "timestamp",
-                            "level_real",
-                            "flow_in_real",
-                            "flow_out_real",
-                            "label",
-                            "anomaly_score",
-                        ]
+            anomaly_points = (
+                base.transform_filter("datum.anomaly_flag == 1")
+                .mark_circle(size=70, color="red")
+                .encode(
+                    y="level_real:Q",
+                    tooltip=[
+                        alt.Tooltip("timestamp:Q", format=".2f", title="Time [s]"),
+                        alt.Tooltip("level_real:Q", format=".3f", title="Level [m]"),
+                        alt.Tooltip("class_name:N", title="Predicted"),
+                        alt.Tooltip("confidence:Q", format=".2f", title="Confidence"),
                     ],
+                )
+            )
+
+            chart = (level_line + anomaly_points).properties(height=280)
+            st.altair_chart(chart, use_container_width=True)
+
+            # Latest anomalies table (small)
+            anomalies = df_live[df_live.get("anomaly_flag", 0) == 1]
+            if not anomalies.empty:
+                st.markdown("##### Latest anomalies")
+                cols_to_show = [
+                    "timestamp",
+                    "level_real",
+                    "flow_in_real",
+                    "flow_out_real",
+                    "label",
+                ]
+                for extra in ["class_name", "confidence"]:
+                    if extra in anomalies.columns:
+                        cols_to_show.append(extra)
+                st.dataframe(
+                    anomalies.tail(8)[cols_to_show],
                     use_container_width=True,
                 )
             else:
-                st.write("✅ No anomalies detected yet in this stream.")
+                st.write("No anomalies detected yet in this stream.")
 
-        with c2:
-            st.markdown("#### Flows & Pump Current")
+        # Side charts: flows, current, predicted class timeline
+        with side_col:
+            st.markdown("#### Flows")
 
-            flows_df = df_live[["timestamp", "flow_in_real", "flow_out_real"]]
-            st.line_chart(
-                data=flows_df.set_index("timestamp"),
-                height=150,
-            )
+            flows_df = df_view[["timestamp", "flow_in_real", "flow_out_real"]]
+            flows_df = flows_df.set_index("timestamp")
+            st.line_chart(flows_df, height=150)
 
-            current_df = df_live[["timestamp", "pump_current"]]
-            st.line_chart(
-                data=current_df.set_index("timestamp"),
-                height=150,
-            )
+            st.markdown("#### Pump Current")
+            current_df = df_view[["timestamp", "pump_current"]]
+            current_df = current_df.set_index("timestamp")
+            st.line_chart(current_df, height=150)
+
+            if "class_name" in df_view.columns:
+                st.markdown("#### Predicted Class Timeline")
+                class_chart = (
+                    alt.Chart(df_view)
+                    .mark_rect()
+                    .encode(
+                        x=alt.X("timestamp:Q", title="Time [s]"),
+                        y=alt.Y("class_name:N", title="Class"),
+                        color=alt.Color("class_name:N", legend=None),
+                        tooltip=[
+                            alt.Tooltip("timestamp:Q", format=".2f", title="Time [s]"),
+                            "class_name:N",
+                        ],
+                    )
+                    .properties(height=80)
+                )
+                st.altair_chart(class_chart, use_container_width=True)
 
         st.markdown("---")
 
-        # Future prediction
+        # -----------------------------------------------------------------
+        # Simple future forecast
+        # -----------------------------------------------------------------
         st.markdown("#### Simple Future Forecast (Water Level)")
 
-        horizon = st.slider("Forecast horizon [seconds]", 10, 120, 30, step=10)
+        horizon = st.slider(
+            "Forecast horizon [seconds]",
+            10,
+            120,
+            30,
+            step=10,
+            key="forecast_horizon",
+        )
         forecast_df = simple_forecast(df_live, horizon_seconds=horizon)
-
-        if forecast_df.empty:
-            st.info("Not enough data yet for forecasting.")
-        else:
-            # Merge last part of history + forecast
-            hist_tail = df_live[["timestamp", "level_real"]].tail(200)
-            hist_tail = hist_tail.rename(columns={"level_real": "level"})
-
-            forecast_plot_df = pd.DataFrame(
-                {
-                    "timestamp": hist_tail["timestamp"].tolist()
-                    + forecast_df["timestamp"].tolist(),
-                    "value": hist_tail["level"].tolist()
-                    + forecast_df["level_pred"].tolist(),
-                    "type": ["History"] * len(hist_tail)
-                    + ["Forecast"] * len(forecast_df),
-                }
-            )
-
-            st.line_chart(
-                data=forecast_plot_df.pivot_table(
-                    index="timestamp",
-                    columns="type",
-                    values="value",
-                ),
-                height=250,
-            )
-
 # ---------------------------------------------------------------------
 # HISTORICAL TAB
 # ---------------------------------------------------------------------
@@ -244,15 +354,35 @@ with tab_history:
         horizontal=True,
     )
 
-    df_hist = load_historical_data(dataset_choice)
+    df_hist, hist_path, exists = load_historical_data(dataset_choice)
 
-    if df_hist.empty:
-        st.info(f"No {dataset_choice.lower()} dataset found yet.")
+    st.caption(f"Looking for file: `{os.path.relpath(hist_path)}`")
+
+    if not exists:
+        st.error(
+            "Could not find the selected dataset file.\n\n"
+            f"Make sure this file exists:\n\n`{hist_path}`"
+        )
+    elif df_hist.empty:
+        st.warning(
+            "The dataset was loaded but it contains **0 rows**.\n\n"
+            "Check that your data-generation scripts actually wrote data "
+            "to this file."
+        )
     else:
-        st.write(f"Loaded {len(df_hist)} rows.")
+        st.write(
+            f"Loaded **{len(df_hist)}** rows from `{os.path.basename(hist_path)}`."
+        )
 
         # Basic filters
-        max_rows = st.slider("Rows to preview", 100, min(5000, len(df_hist)), 500)
+        max_rows = st.slider(
+            "Rows to preview",
+            100,
+            min(5000, len(df_hist)),
+            500,
+            step=100,
+            key="hist_rows",
+        )
         st.dataframe(df_hist.head(max_rows), use_container_width=True)
 
         st.markdown("---")
@@ -261,19 +391,33 @@ with tab_history:
 
         with col_a:
             st.markdown("#### Water Level")
-            st.line_chart(
-                data=df_hist.set_index("timestamp")[["level_real"]],
-                height=300,
-            )
+            if "timestamp" in df_hist.columns and "level_real" in df_hist.columns:
+                st.line_chart(
+                    data=df_hist.set_index("timestamp")[["level_real"]],
+                    height=260,
+                )
+            else:
+                st.info("`timestamp` or `level_real` column missing in this dataset.")
 
         with col_b:
             st.markdown("#### Flow In / Flow Out")
-            st.line_chart(
-                data=df_hist.set_index("timestamp")[["flow_in_real", "flow_out_real"]],
-                height=300,
-            )
+            if (
+                "timestamp" in df_hist.columns
+                and "flow_in_real" in df_hist.columns
+                and "flow_out_real" in df_hist.columns
+            ):
+                st.line_chart(
+                    data=df_hist.set_index("timestamp")[
+                        ["flow_in_real", "flow_out_real"]
+                    ],
+                    height=260,
+                )
+            else:
+                st.info("Flow columns missing in this dataset.")
 
         if "label" in df_hist.columns:
             st.markdown("#### Label Distribution")
             label_counts = df_hist["label"].value_counts().sort_index()
             st.bar_chart(label_counts)
+        else:
+            st.info("`label` column not found; cannot show label distribution.")
